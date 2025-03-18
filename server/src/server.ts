@@ -21,9 +21,9 @@ const server = new ApolloServer({
 async function startServer() {
   await server.start();
 
-app.use('/graphql', expressMiddleware(server,
+app.use('/graphql', expressMiddleware(server as any,
   {
-    context: authenticateToken,
+    context: authenticateToken as any,
   }
 ));
 
