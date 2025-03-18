@@ -1,3 +1,4 @@
 import User from './User';
+import BookDocument from './Book';
 
-export default { User };
+export default { User, BookDocument };
