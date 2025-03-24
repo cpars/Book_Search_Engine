@@ -20,37 +20,54 @@ const server = new ApolloServer({
 });
 
 async function startServer() {
-  await server.start();
+  try {
+    await server.start();
 
-  // Ensure context function is properly set up with correct typing
-  app.use(
-    '/graphql',
-    expressMiddleware(server, {
-      context: async ({ req }: { req: Request }) => {
-        const user = authenticateToken(req); // Get authenticated user
-        return { user }; // Attach user to context
-      },
-    })
-  );
+    app.use(
+      '/graphql',
+      expressMiddleware(server, {
+        context: async ({ req }: { req: Request }) => {
+          try {
+            const user = authenticateToken(req); // Get authenticated user
+            return { user }; // Attach user to context
+          } catch (error) {
+            console.error('Error in authentication:', error);
+            return { user: null }; // Allow requests to proceed even if user is not authenticated
+          }
+        },
+      })
+    );
 
-  // Serve static assets in production
-  if (process.env.NODE_ENV === 'production') {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
+    // Serve static assets in production
+    if (process.env.NODE_ENV === 'production') {
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = path.dirname(__filename);
 
-    app.use(express.static(path.join(__dirname, '../client/dist')));
+      app.use(express.static(path.join(__dirname, '../client/dist')));
 
-    app.get('*', (_req, res) => {
-      res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+      app.get('*', (_req, res) => {
+        res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+      });
+    }
+
+    // Handle MongoDB connection errors
+    db.on('error', (err) => {
+      console.error('MongoDB connection error:', err);
+      process.exit(1); // Exit process if DB fails to connect
     });
+
+    db.once('open', () => {
+      console.log('Connected to MongoDB');
+
+      app.listen(PORT, () => {
+        console.log(`API server running on port ${PORT}!`);
+        console.log(`🚀 Use GraphQL at http://localhost:${PORT}/graphql`);
+      });
+    });
+  } catch (error) {
+    console.error('Error starting server:', error);
+    process.exit(1); // Exit if the server fails to start
   }
-
-  db.once('open', () => {
-    app.listen(PORT, () => {
-      console.log(`API server running on port ${PORT}!`);
-      console.log(`🚀 Use GraphQL at http://localhost:${PORT}/graphql`);
-    });
-  });
 }
 
 startServer();
