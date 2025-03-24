@@ -15,7 +15,7 @@ interface AddUserArgs {
 }
 
 interface SaveBookArgs {
-    book: BookDocument;
+    book: typeof BookDocument;
 }
 
 interface RemoveBookArgs {

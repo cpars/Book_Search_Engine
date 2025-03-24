@@ -1,7 +1,7 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "description": "",
+  "description": "GraphQL API server built with Apollo, Express, TypeScript, and MongoDB.",
   "main": "dist/server.js",
   "type": "module",
   "scripts": {

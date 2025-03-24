@@ -1,50 +1,58 @@
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
-import { typeDefs, resolvers } from './schemas/index.js'; 
+import { typeDefs, resolvers } from './schemas/index.js';
 import { authenticateToken } from './services/auth.js';
 import express from 'express';
+import type { Request, Response } from 'express';
 import path from 'node:path';
 import db from './config/connection.js';
-import { fileURLToPath } from 'node:url'; 
+import { fileURLToPath } from 'node:url';
 
-const app = express();
-const PORT = process.env.PORT || 3001;
-
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
-
+// Create an ApolloServer instance
 const server = new ApolloServer({
   typeDefs,
   resolvers,
 });
 
-async function startServer() {
+// Start the server
+const startApolloServer = async () => {
   await server.start();
+  await db();
 
-app.use('/graphql', expressMiddleware(server as any,
-  {
-    context: authenticateToken as any,
+  // Create an express application and use the ApolloServer middleware
+  const PORT = process.env.PORT || 3001;
+  const app = express();
+
+  app.use(express.urlencoded({ extended: false }));
+  app.use(express.json());
+
+  app.use('/graphql', expressMiddleware(server as any, 
+    {
+      context: authenticateToken as any,
+    }
+  ));
+
+  // Check if the environment is production
+  if (process.env.NODE_ENV === 'production') {
+    // Workaround for __dirname
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+
+    // Serve the static files from the React app
+    app.use(express.static(path.join(__dirname, '../../client/dist')));
+
+    // Handle GET requests to /api route
+    app.get('*', (_req: Request, res: Response) => {
+      res.sendFile(path.join(__dirname, '../../client/dist/index.html'));
+    });
   }
-));
 
-// if we're in production, serve client/build as static assets
-if (process.env.NODE_ENV === 'production') {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename)
-  
-  app.use(express.static(path.join(__dirname, '../client/dist')));
-
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+  // Start the server
+  app.listen(PORT, () => {
+    console.log(`API server running on port ${PORT}!`);
+    console.log(`🚀 Use GraphQL at http://localhost:${PORT}/graphql`);
   });
-}
-
-db.once('open', () => {
-app.listen(PORT, () => {
-  console.log(`API server running on port ${PORT}!`);
-  console.log(`🚀 Use GraphQL at http://localhost:${PORT}/graphql`);
-});
-})
 };
 
-startServer();
+// Call the startApolloServer function
+startApolloServer();
