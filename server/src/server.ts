@@ -2,72 +2,56 @@ import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
 import { typeDefs, resolvers } from './schemas/index.js';
 import { authenticateToken } from './services/auth.js';
-import express, { Request } from 'express';
+import express from 'express';
+import type { Request, Response } from 'express';
 import path from 'node:path';
 import db from './config/connection.js';
 import { fileURLToPath } from 'node:url';
 
-const app = express();
-const PORT = process.env.PORT || 3001;
-
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
-
-// Initialize Apollo Server
+// Create an ApolloServer instance
 const server = new ApolloServer({
   typeDefs,
   resolvers,
 });
 
-async function startServer() {
-  try {
-    await server.start();
+// Start the server
+const startApolloServer = async () => {
+  await server.start();
+  await db();
 
-    app.use(
-      '/graphql',
-      expressMiddleware(server, {
-        context: async ({ req }: { req: Request }) => {
-          try {
-            const user = authenticateToken(req); // Get authenticated user
-            return { user }; // Attach user to context
-          } catch (error) {
-            console.error('Error in authentication:', error);
-            return { user: null }; // Allow requests to proceed even if user is not authenticated
-          }
-        },
-      })
-    );
+  // Create an express application and use the ApolloServer middleware
+  const PORT = process.env.PORT || 3001;
+  const app = express();
 
-    // Serve static assets in production
-    if (process.env.NODE_ENV === 'production') {
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = path.dirname(__filename);
+  app.use(express.urlencoded({ extended: false }));
+  app.use(express.json());
 
-      app.use(express.static(path.join(__dirname, '../client/dist')));
-
-      app.get('*', (_req, res) => {
-        res.sendFile(path.join(__dirname, '../client/dist/index.html'));
-      });
+  app.use('/graphql', expressMiddleware(server as any, 
+    {
+      context: authenticateToken as any,
     }
+  ));
 
-    // Handle MongoDB connection errors
-    db.on('error', (err) => {
-      console.error('MongoDB connection error:', err);
-      process.exit(1); // Exit process if DB fails to connect
+  // Check if the environment is production
+  if (process.env.NODE_ENV === 'production') {
+    // Workaround for __dirname
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+
+    // Serve the static files from the React app
+    app.use(express.static(path.join(__dirname, '../../client/dist')));
+
+    // Handle GET requests to /api route
+    app.get('*', (_req: Request, res: Response) => {
+      res.sendFile(path.join(__dirname, '../../client/dist/index.html'));
     });
-
-    db.once('open', () => {
-      console.log('Connected to MongoDB');
-
-      app.listen(PORT, () => {
-        console.log(`API server running on port ${PORT}!`);
-        console.log(`🚀 Use GraphQL at http://localhost:${PORT}/graphql`);
-      });
-    });
-  } catch (error) {
-    console.error('Error starting server:', error);
-    process.exit(1); // Exit if the server fails to start
   }
-}
 
-startServer();
+  // Start the server
+  app.listen(PORT, () => {
+    console.log(`API server running on port ${PORT}!`);
+    console.log(`🚀 Use GraphQL at http://localhost:${PORT}/graphql`);
+  });
+};
+
+startApolloServer();
